@@ -1,0 +1,189 @@
+// TIle Macros
+#macro SYSTEM_DUNGEONSYSTEM_DUNGEON_GENERATOR_WALKER_CELL_ROOM_BORDER_00  4
+#macro SYSTEM_DUNGEONSYSTEM_DUNGEON_GENERATOR_WALKER_CELL_SIZE_00		  32 
+
+//Global Grid Variables
+globalvar system_dungeon_generator_walker_grid_00; 
+globalvar system_dungeon_generator_walker_grid_width_00;
+globalvar system_dungeon_generator_walker_grid_height_00;
+
+//Global Direction List Variable
+globalvar system_dungeon_generator_walker_directions_00;
+
+//Global Setting Variables
+globalvar system_dungeon_generator_walker_setting_step_amount_00;
+globalvar system_dungeon_generator_walker_setting_step_min_amount_per_direction_00;
+globalvar system_dungeon_generator_walker_setting_step_max_amount_per_direction_00;
+globalvar system_dungeon_generator_walker_setting_step_direction_change_rate_00;
+
+//Set Step Settings
+function system_dungeon_generator_walker_set_settings_step_00(_step_amount,_step_min_amount_per_direction,_step_max_amount_per_direction,_step_direction_change_rate)
+{
+	global.system_dungeon_generator_walker_setting_step_amount_00 = _step_amount;
+	global.system_dungeon_generator_walker_setting_step_min_amount_per_direction_00 = _step_min_amount_per_direction;
+	global.system_dungeon_generator_walker_setting_step_max_amount_per_direction_00 = _step_max_amount_per_direction;
+	global.system_dungeon_generator_walker_setting_step_direction_change_rate_00 = _step_direction_change_rate;
+}
+
+//Generate (Do All Internal Functions)
+function system_dungeon_generator_walker_generate_00()
+{
+	system_dungeon_generator_walker_clean_up_00();
+	system_dungeon_generator_walker_create_grid_from_room_00();
+	system_dungeon_generator_walker_step_00();
+	system_dungeon_generator_walker_post_process_00();
+	system_dungeon_generator_walker_set_room_tiles_debug_00();
+}
+
+//Generate Grid
+function system_dungeon_generator_walker_create_grid_from_room_00()
+{
+	//Get Grid Width And Height
+	global.system_dungeon_generator_walker_grid_width_00  = room_width  div SYSTEM_DUNGEONSYSTEM_DUNGEON_GENERATOR_WALKER_CELL_SIZE_00;
+	global.system_dungeon_generator_walker_grid_height_00 = room_height div SYSTEM_DUNGEONSYSTEM_DUNGEON_GENERATOR_WALKER_CELL_SIZE_00;
+		
+	//Create Grid
+	global.system_dungeon_generator_walker_grid_00 = ds_grid_create(global.system_dungeon_generator_walker_grid_width_00,global.system_dungeon_generator_walker_grid_height_00);
+}
+
+//Clean Up Grid
+function system_dungeon_generator_walker_clean_up_00()
+{
+	//If Global Variable Exists It Means We Already Created A Grid So Destroy Grid Before Making A New One
+	if (variable_global_exists("system_dungeon_generator_walker_grid_00"))
+	{
+		ds_grid_destroy(global.system_dungeon_generator_walker_grid_00);
+	}
+}
+
+
+//Generate Dungeon
+function system_dungeon_generator_walker_step_00()
+{
+	//We Want To Randomize This Code
+	randomize();
+	
+	//Create Direction List If Not Created Already
+	if (variable_global_exists("system_dungeon_generator_walker_directions_00") == false)
+	{
+		global.system_dungeon_generator_walker_directions_00 = ds_list_create();
+		ds_list_add(global.system_dungeon_generator_walker_directions_00,0);
+		ds_list_add(global.system_dungeon_generator_walker_directions_00,1);
+		ds_list_add(global.system_dungeon_generator_walker_directions_00,2);
+		ds_list_add(global.system_dungeon_generator_walker_directions_00,3);
+	}
+	
+	//Create Controller (We Start Middle Of Grid)
+	var _step_border = SYSTEM_DUNGEONSYSTEM_DUNGEON_GENERATOR_WALKER_CELL_ROOM_BORDER_00;
+	var _step_x = global.system_dungeon_generator_walker_grid_width_00 div 2;
+	var _step_y = global.system_dungeon_generator_walker_grid_height_00 div 2;
+	var _step_directions = ds_list_create();
+    var _step_direction = 0;
+	var _step_direction_step_amount = 0;
+	var _step_direction_do_change = false;
+	var _step_direction_index = 0;
+	
+	//Get A Random Starting Step Direction
+	ds_list_copy(_step_directions,global.system_dungeon_generator_walker_directions_00);
+	ds_list_shuffle(_step_directions);
+	_step_direction =  _step_directions[| 0];
+	
+	//Do Controller Steps To Set Grid Data
+	for (var _i = 0; _i < global.system_dungeon_generator_walker_setting_step_amount_00; _i++)
+	{
+		//Set Current Grid / Controller Location To Floor Tile
+		global.system_dungeon_generator_walker_grid_00[# _step_x, _step_y] = 1;
+		
+		//Do Direction Change By Chance If We Stepped Min Amount???
+		_step_direction_do_change = irandom(global.system_dungeon_generator_walker_setting_step_direction_change_rate_00) ==  global.system_dungeon_generator_walker_setting_step_direction_change_rate_00
+		&& _step_direction_step_amount >= global.system_dungeon_generator_walker_setting_step_min_amount_per_direction_00;
+
+		//Do Direction Change By Chance If We Did Max Step Amount???
+		if (_step_direction_step_amount >= global.system_dungeon_generator_walker_setting_step_max_amount_per_direction_00)
+		{
+			_step_direction_do_change = true;
+		}
+		
+		//Change Direction
+		if (_step_direction_do_change == true)
+		{
+			//Copy Step Directions From Global Step Directions
+			ds_list_copy(_step_directions,global.system_dungeon_generator_walker_directions_00);
+
+			//Remove Current Direction From Step Directions By Index
+			_step_direction_index = ds_list_find_index(_step_directions,_step_direction);
+			ds_list_delete(_step_directions,_step_direction_index);
+			
+			//Set Step Direction To Random Direction
+			ds_list_shuffle(_step_directions);
+			_step_direction = _step_directions[| 0];
+			
+			//Set Step Direction Step Amount To 0
+			_step_direction_step_amount = 0;
+		}
+		
+		//We Did Not Change Direction So Add On To Direction Step Amount
+		else
+		{
+			_step_direction_step_amount += 1;
+		}
+		
+		//Move Controller
+		if (_step_direction == 0) _step_y += 1; 
+		if (_step_direction == 1) _step_y -= 1;
+		if (_step_direction == 2) _step_x += 1;
+		if (_step_direction == 3) _step_x -= 1;
+		
+		//Keep Controller X In Bounds Of Grid
+		if (_step_x <=  _step_border) _step_x = _step_border
+		if (_step_x >=  global.system_dungeon_generator_walker_grid_width_00 - _step_border) _step_x = global.system_dungeon_generator_walker_grid_width_00 - _step_border;
+		
+		//Keep Controller Y In Bounds Of Grid
+		if (_step_y <=  _step_border) _step_y = _step_border;
+		if (_step_y >=  global.system_dungeon_generator_walker_grid_height_00 - _step_border) _step_y = global.system_dungeon_generator_walker_grid_height_00 - _step_border;
+		
+	}
+	
+	//Destroy Local Step Directions List To Clean Up Memory
+	ds_list_destroy(_step_directions);
+}
+
+function system_dungeon_generator_walker_post_process_00()
+{
+	//Get Border
+	var _border = SYSTEM_DUNGEONSYSTEM_DUNGEON_GENERATOR_WALKER_CELL_ROOM_BORDER_00;
+		
+	//Get Rid Of Single Null Tiles
+	for (var _y = _border; _y < global.system_dungeon_generator_walker_grid_height_00 - _border; _y++)
+	{
+		for (var _x = _border; _x < global.system_dungeon_generator_walker_grid_width_00 - _border; _x++)
+		{
+			if (global.system_dungeon_generator_walker_grid_00[# _x,_y] == 0)
+			{
+				var _is_north_tile_Solid = global.system_dungeon_generator_walker_grid_00[# _x, _y - 1] == 1;
+				var _is_east_tile_Solid  = global.system_dungeon_generator_walker_grid_00[# _x - 1, _y] == 1;
+				var _is_south_tile_Solid = global.system_dungeon_generator_walker_grid_00[# _x, _y + 1] == 1;
+				var _is_west_tile_Solid  = global.system_dungeon_generator_walker_grid_00[# _x - 1, _y] == 1;
+				 
+				if (_is_north_tile_Solid && _is_east_tile_Solid && _is_south_tile_Solid && _is_west_tile_Solid)
+					global.system_dungeon_generator_walker_grid_00[# _x, _y] = 1;
+
+			}
+		}
+	}
+}
+
+function system_dungeon_generator_walker_set_room_tiles_debug_00()
+{	
+	//Get Tilemap | Exit Code If Tilemap Does Not Exist
+	var _tilemap_id = layer_tilemap_get_id("Tiles_Debug");
+
+	//Set Tiles
+	for (var _y = 0; _y < global.system_dungeon_generator_walker_grid_height_00; _y++)
+	{
+		for (var _x = 0; _x < global.system_dungeon_generator_walker_grid_width_00; _x++)
+		{
+			tilemap_set(_tilemap_id,global.system_dungeon_generator_walker_grid_00[# _x, _y],_x,_y);
+		}
+	}	
+}

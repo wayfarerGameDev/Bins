@@ -1,0 +1,138 @@
+//Camera 2D Macros
+#macro SYSTEM_CAMERA_2D_WIDTH        384
+#macro SYSTEM_CAMERA_2D_HEIGHT       216
+#macro SYSTEM_CAMERA_2D_SCALE        3
+
+//Camera 2D Variables
+globalvar system_camera_2D_camera;
+globalvar system_camera_2D_view_matrix;
+globalvar system_camera_2D_projection_matrix;
+globalvar system_camera_2D_pos_x;
+globalvar system_camera_2D_pos_y;
+globalvar system_camera_2D_target_obj;
+globalvar system_camera_2D_border_left;
+globalvar system_camera_2D_border_right;
+globalvar system_camera_2D_border_top;
+globalvar system_camera_2D_border_bottom;
+
+//Create Camera 2D
+function system_camera_2D_create()
+{
+	//Destroy Camera If Already Created
+	if (variable_global_exists("system_camera_2D_camera") == true)
+	{
+		return;
+	}
+	
+	//Create Camera
+	global.system_camera_2D_camera = camera_create();
+		
+	//Initalize Camrea Position XY
+	global.system_camera_2D_pos_x = 0;
+	global.system_camera_2D_pos_y = 0;
+	
+	//Initalize Camera Border
+	global.system_camera_2D_border_left   = 0;
+	global.system_camera_2D_border_right  = 0;
+	global.system_camera_2D_border_top    = 0;
+	global.system_camera_2D_border_bottom = 0;
+	
+	//Start With No Target
+	global.system_camera_2D_target_obj = undefined;
+	global.system_camera_2D_pos_x = 0;
+	global.system_camera_2D_pos_y = 0;
+	
+	//Create View Matrix And Project Matrix For 2D Game
+	global.system_camera_2D_view_matrix = matrix_build_lookat(0,0,-10,0,0,0,0,1,0);
+	global.system_camera_2D_projection_matrix = matrix_build_projection_ortho(SYSTEM_CAMERA_2D_WIDTH,SYSTEM_CAMERA_2D_HEIGHT,1,3200);
+}
+
+//Begin Step Camera 2D
+function system_camera_2D_begin_step()
+{
+	//Create Camera If Needed
+	system_camera_2D_create();
+	
+	//Force View Enabled And Set View Properties
+	if (view_enabled == false)
+	{
+		//Enable And Set View 0 To Camera Properties
+		view_set_visible(0,true);
+		view_set_wport(0,SYSTEM_CAMERA_2D_WIDTH);
+		view_set_hport(0,SYSTEM_CAMERA_2D_HEIGHT);
+		
+		//Set Camera View And Projection Matrix And Set View Camera 0 To Our Camera 2D
+		camera_set_view_mat(global.system_camera_2D_camera,global.system_camera_2D_view_matrix);
+		camera_set_proj_mat(global.system_camera_2D_camera,global.system_camera_2D_projection_matrix);
+		
+		view_camera[0] = global.system_camera_2D_camera;
+		view_enabled = true;
+	}
+	
+	//Make Sure Window, Surface And GUI Is Correct Size 
+	if (window_get_width() != SYSTEM_CAMERA_2D_WIDTH * SYSTEM_CAMERA_2D_SCALE && window_get_height() != SYSTEM_CAMERA_2D_HEIGHT * SYSTEM_CAMERA_2D_SCALE)
+	{
+		window_set_size(SYSTEM_CAMERA_2D_WIDTH * SYSTEM_CAMERA_2D_SCALE,SYSTEM_CAMERA_2D_HEIGHT * SYSTEM_CAMERA_2D_SCALE);
+		surface_resize(application_surface,SYSTEM_CAMERA_2D_WIDTH,SYSTEM_CAMERA_2D_HEIGHT);
+		display_set_gui_size(SYSTEM_CAMERA_2D_WIDTH,SYSTEM_CAMERA_2D_HEIGHT);
+	}
+}
+
+//End Step Camera 2D
+function system_camera_2D_end_step()
+{
+	//Create Camera If Needed
+	system_camera_2D_create();
+	
+	//Camera Has No Target Object So Exit Code
+	if (global.system_camera_2D_target_obj == undefined)
+	{
+		system_camera_2D_snap_pos_to_room_center();
+		return;
+	}
+	
+	//Set Camera Postion X And Y
+	global.system_camera_2D_pos_x = lerp(system_camera_2D_pos_x, global.system_camera_2D_target_obj.x, 0.1);
+	global.system_camera_2D_pos_y = lerp(system_camera_2D_pos_y, global.system_camera_2D_target_obj.y, 0.1);
+	
+	//Clamp Camera Position X And Y
+	global.system_camera_2D_pos_x = clamp(global.system_camera_2D_pos_x,global.system_camera_2D_border_left,room_width - global.system_camera_2D_border_right);
+	global.system_camera_2D_pos_y = clamp(global.system_camera_2D_pos_y,global.system_camera_2D_border_top,room_height - global.system_camera_2D_border_bottom);
+	
+	//Update Camera View Matrix
+	global.system_camera_2D_view_matrix = matrix_build_lookat(global.system_camera_2D_pos_x,global.system_camera_2D_pos_y,-10,global.system_camera_2D_pos_x,global.system_camera_2D_pos_y,0,0,1,0);
+	camera_set_view_mat(global.system_camera_2D_camera,global.system_camera_2D_view_matrix);
+
+}
+
+//Snap Camera 2D Position To Target
+function system_camera_2D_snap_pos_to_target()
+{
+	//Create Camera If Needed
+	system_camera_2D_create();
+	
+	//Set Camera Postion X And Y
+	global.system_camera_2D_pos_x =  global.system_camera_2D_target_obj.x;
+	global.system_camera_2D_pos_y =  global.system_camera_2D_target_obj.y;
+	
+	
+	//Update Camera View Matrix
+	global.system_camera_2D_view_matrix = matrix_build_lookat(global.system_camera_2D_pos_x,global.system_camera_2D_pos_y,-10,global.system_camera_2D_pos_x,global.system_camera_2D_pos_y,0,0,1,0);
+	camera_set_view_mat(global.system_camera_2D_camera,global.system_camera_2D_view_matrix);
+}
+
+//Snap Camera 2D Position To Target
+function system_camera_2D_snap_pos_to_room_center()
+{
+	//Create Camera If Needed
+	system_camera_2D_create();
+	
+	//Set Camera Postion X And Y
+	global.system_camera_2D_pos_x =  room_width / 2;
+	global.system_camera_2D_pos_y =  room_height / 2;
+	
+	
+	//Update Camera View Matrix
+	global.system_camera_2D_view_matrix = matrix_build_lookat(global.system_camera_2D_pos_x,global.system_camera_2D_pos_y,-10,global.system_camera_2D_pos_x,global.system_camera_2D_pos_y,0,0,1,0);
+	camera_set_view_mat(global.system_camera_2D_camera,global.system_camera_2D_view_matrix);
+}

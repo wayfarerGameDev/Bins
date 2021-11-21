@@ -1,0 +1,405 @@
+//Declare System Menu
+global.system_menu_font = Font_Menu_Multi_Lang;
+global.system_menu_lang = "en_us";
+global.system_menu_csv_file = "menus.csv";
+
+//Declare Menu DS Grid Data
+global.system_menu_names = [];
+global.system_menu_data_ds_grid = ds_grid_create(0,0);
+global.system_menu_data_ds_grid_width = 0;
+global.system_menu_data_ds_grid_height = 0;
+
+//Declare Menu Event Handler
+global.system_menu_event_handler_obj = undefined;
+global.system_menu_event_name = "";
+global.system_menu_event_for_frame_did = false;
+
+/// Menu Structure
+global.system_menu_menu_map = ds_map_create();
+
+function system_menu_menu_struct() constructor
+{
+	texts = ["","",""];
+    options = ["","",""];
+	types = ["","",""];
+	menu_events = ["","",""];
+	hovered_index = 0;
+	pos = [0,0];
+	size = [0,0];
+	padding_border = 0;
+	padding_item = 0;
+	padding_item_extra = 0;
+	state = 0;
+	background_sprite = undefined;
+	font = undefined;
+}
+
+
+////////////////////////////////////////////////////////////////////////////
+/// Create
+
+function system_menu_create()
+{
+	//Don't Load DS Grid If Already Loaded
+	if (global.system_menu_data_ds_grid_width > 0)
+		return;
+	
+	//Create
+	system_menu_create_ds_grid()
+	
+	//Load Menu Data With Starting Language
+	system_menu_set_lang(global.system_menu_lang);
+}
+
+function system_menu_create_ds_grid()
+{
+	//Destroy Old DS Grid
+	ds_grid_destroy(global.system_menu_data_ds_grid);
+	
+	//Load CSV Grid
+	global.system_menu_data_ds_grid = load_csv(global.system_menu_csv_file);
+	global.system_menu_data_ds_grid_width = ds_grid_width(global.system_menu_data_ds_grid);
+	global.system_menu_data_ds_grid_height = ds_grid_height(global.system_menu_data_ds_grid);
+	
+	//Create Menu Names Array From CSV Grid
+	{
+		var _added = [];
+		var _was_added = false;
+		var _added_index = 0;
+	
+		global.system_menu_names = array_create(0);
+		for (var j = 1; j < global.system_menu_data_ds_grid_height; j++;)
+		{
+			var t = string(global.system_menu_data_ds_grid[# 1, j]);
+			if (t == "")
+				continue;
+		
+			//Cehck If Already Added
+			_was_added = false;
+			for (var i = 0; i < array_length(_added); i++)
+			{
+				if (_added[i] == t)
+					_was_added = true;
+			}
+			
+			//Add If Not Already Added
+			if (!_was_added)
+			{
+				array_push(global.system_menu_names,t);
+				_added[_added_index] = t;
+				_added_index++;
+			}
+		}
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////
+/// Step
+
+function system_menu_step()
+{
+	//Reset Event
+	system_menu_reset_event();
+	
+	//Step All Enabled Menus
+	var _array_length = array_length(global.system_menu_names);
+	for (var i = 0; i < _array_length; i++)
+		system_menu_step_menu(global.system_menu_names[i]);
+}
+
+function system_menu_step_menu(_menu_name)
+{
+	//Return If Menu Does Not Exist
+	if (!ds_map_exists(global.system_menu_menu_map,_menu_name))
+		return;
+	
+	//Get Menu And Array Length Of Menu Texts
+	var _menu = ds_map_find_value(global.system_menu_menu_map,_menu_name);
+	var _array_length = array_length(_menu.texts);
+	
+	//Return If Not Active
+	if (_menu.state == 0)
+		return;
+	
+	//Get Input
+	var _input = 0;
+	
+	//Keyboard WASD
+	if (keyboard_check_pressed(ord("W"))) _input = -1;
+	if (keyboard_check_pressed(ord("S"))) _input =  1;
+	
+	//Keybaord Arrow
+	if (keyboard_check_pressed(vk_up))    _input = -1;
+	if (keyboard_check_pressed(vk_down))  _input =  1;
+	
+	//Go To Next Or Previous Item Selected Index | Clamp Item Selected Index
+	var _hovered_index_previous = _menu.hovered_index;
+	_menu.hovered_index += _input;
+	_menu.hovered_index = clamp(_menu.hovered_index,0,_array_length - 1);
+	if(_hovered_index_previous != _menu.hovered_index)
+		system_menu_do_event("hovered_changed");
+
+	//Do Event Input
+	if (_input == 0 && keyboard_check_pressed(vk_enter))
+		system_menu_do_event(_menu.menu_events[_menu.hovered_index]);	
+}
+
+////////////////////////////////////////////////////////////////////////////
+/// Draw GUI
+
+function system_menu_draw_gui()
+{
+	//Draw GUI On All Enabled Menus
+	var _array_length = array_length(global.system_menu_names);
+	for (var i = 0; i < _array_length; i++)
+		system_menu_draw_gui_menu(global.system_menu_names[i]);
+}
+
+function system_menu_draw_gui_menu(_menu_name)
+{
+	//Return If Menu Does Not Exist
+	if (!ds_map_exists(global.system_menu_menu_map,_menu_name))
+		return;
+	
+	//Get Menu And Array Length Of Menu Texts
+	var _menu = ds_map_find_value(global.system_menu_menu_map,_menu_name);
+	var _array_length = array_length(_menu.texts);
+	
+	//Return If Not Active
+	if (_menu.state == 0 )
+		return;
+	
+	//Draw Menu Background
+	if (_menu.background_sprite != undefined)
+		draw_sprite_ext(_menu.background_sprite,0,_menu.pos[0],_menu.pos[1],_menu.size[0],_menu.size[1],0,c_white,1);
+ 
+	//Set Font To Use
+	draw_set_font(global.system_menu_font);
+	if (_menu.font != undefined)
+		draw_set_font(_menu.font);
+		
+	//Set Alignment Settings
+	draw_set_valign(fa_top);
+	draw_set_halign(fa_left);
+	
+	//Draw Menu Texts
+	for (var i = 0; i < _array_length; i++)
+	{
+		//Get Color For Text Based If Element Is Hovered
+		var _col = c_white;
+		if (i == _menu.hovered_index)
+			_col = c_yellow;
+			
+		// Draw Text
+		draw_text_color(_menu.pos[0] +_menu.padding_border,_menu.pos[1] + _menu.padding_border + _menu.padding_item * i,_menu.texts[i],_col,_col,_col,_col,1);
+	}
+}
+
+function system_menu_draw_gui_ds_grid()
+{
+	//Set Font To Default Game Maker One
+	draw_set_font(global.system_menu_font);
+	
+	//Draw
+	var xx = 32;
+	var yy = 32;
+	for (var i = 0; i < global.system_menu_data_ds_grid_width; i++;)
+    { 
+		for (var j = 0; j < global.system_menu_data_ds_grid_height; j++;)
+        { 
+			draw_text(xx, yy, string(global.system_menu_data_ds_grid[# i, j]));
+			yy += 32;
+		} 
+		yy = 32;
+		xx += 200;
+    }
+}
+
+function system_menu_draw_gui_menu_names()
+{
+	//Set Font To Default Game Maker One
+	draw_set_font(global.system_menu_font);
+	
+	//Draw
+	for (var i = 0; i < array_length(global.system_menu_names); i++;)
+    { 
+		draw_text(10, i * 20, global.system_menu_names[i]);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////
+/// Set Data
+
+function system_menu_set_lang(_lang)
+{
+	//Set Lang And Get Menu Data
+	global.system_menu_lang = _lang;
+	system_menu_get_menu_datas();
+}
+
+function system_menu_get_lang_font(_lang,_asset)
+{
+	//Shared Map Strings
+	var _map_string_special = " !\"#$%&'()*+,-./{|}~[\\]^_':;<=>?@";
+	var _map_string_numbers = "0123456789";
+	
+	//English Map String
+	var _map_string_en_us = _map_string_special + _map_string_numbers + "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+	var _map_string_ru_ru = _map_string_special + _map_string_numbers + "ЁАБВГДЕЖЗИЙКПМНОПРСТУФХЦЧШЩЪыЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюяё";
+	
+	//Set Font Based On Language
+	if (_lang == "en_us") return font_add_sprite_ext(_asset,_map_string_en_us,false,0);
+	if (_lang == "ru_ru") return font_add_sprite_ext(_asset,_map_string_ru_ru,false,0);
+}
+
+function system_menu_get_menu_datas()
+{
+	//Get Menu Data Foreach Menu Name
+	var _array_length = array_length(global.system_menu_names);
+	for (var i = 0; i < _array_length; i++)
+	{
+		system_menu_get_menu_data(global.system_menu_names[i]);
+		system_menu_set_size_dynamic(global.system_menu_names[i]);
+	}
+}
+
+function system_menu_get_menu_data(_menu_name)
+{
+	//Create Menu Data Arrays
+	var _texts = [];
+	var _options = [];
+	var _types = [];
+	var _events = [];
+	var _array_index = 0;	
+	
+	//Create Undefined Menu Here For Scope
+	var _menu =  undefined;
+	
+	//Create Menu Struct If Not Already Created
+	if (!ds_map_exists(global.system_menu_menu_map,_menu_name))
+	{
+		_menu = new system_menu_menu_struct();
+		ds_map_add(global.system_menu_menu_map,_menu_name,_menu);	
+	}
+	
+	//Get Menu Struct If Already Created
+	else _menu = ds_map_find_value(global.system_menu_menu_map,_menu_name);
+	
+	//Set Background and Font To Undefined
+	_menu.background_sprite = undefined;
+	_menu.font = undefined;
+			
+	//Set Menu Data Arrays
+	for (var yy = 0; yy < global.system_menu_data_ds_grid_height; yy++;)
+    {
+		var _data_type = global.system_menu_data_ds_grid[# 0,yy];
+		var _menu_name_in = global.system_menu_data_ds_grid[# 1,yy];
+		var _lang_in = global.system_menu_data_ds_grid[# 2,yy];
+		
+		//Menu Item
+		if (_data_type == "menu_item" && _menu_name == _menu_name_in && _lang_in == global.system_menu_lang)
+		{
+			_texts[_array_index] = global.system_menu_data_ds_grid[# 3,yy];
+			_options[_array_index] = global.system_menu_data_ds_grid[# 4,yy];
+			_types[_array_index] = global.system_menu_data_ds_grid[# 5,yy];
+			_events[_array_index] = global.system_menu_data_ds_grid[# 6,yy];
+			_array_index++;
+		}
+		
+		//Menu Style
+		if (_data_type == "menu_style" && _menu_name == _menu_name_in && _lang_in == global.system_menu_lang)
+		{
+			var _font_asset_index = asset_get_index(global.system_menu_data_ds_grid[# 3,yy]);
+			var _background_sprite_asset_index = asset_get_index(global.system_menu_data_ds_grid[# 4,yy]);
+			
+			if (_font_asset_index != -1)
+				_menu.font = system_menu_get_lang_font(_lang_in,_font_asset_index);
+			if (_background_sprite_asset_index != -1)
+				_menu.background_sprite = _background_sprite_asset_index;
+			
+			_menu.padding_border = real(global.system_menu_data_ds_grid[# 5,yy]);
+			_menu.padding_item_extra = real(global.system_menu_data_ds_grid[# 6,yy]);
+		}
+    }
+	
+	//Set Menu Data
+	_menu.texts = _texts;
+	_menu.options = _options;
+	_menu.types = _types;
+	_menu.menu_events = _events;
+}
+
+function system_menu_set_state(_menu_name,_state)
+{
+	//Return If Menu Does Not Exist
+	if (!ds_map_exists(global.system_menu_menu_map,_menu_name))
+		return;
+	
+	//Get Menu Struct And Set State
+	var _menu = ds_map_find_value(global.system_menu_menu_map,_menu_name);
+	_menu.state = _state;
+}
+
+function system_menu_set_size_dynamic(_menu_name)
+{
+	//Return If Menu Does Not Exist Or Font Does Not Exist
+	if (!ds_map_exists(global.system_menu_menu_map,_menu_name) || global.system_menu_font == undefined)
+		return;
+	
+	//Get Menu Struct And Length Of Texts
+	var _menu = ds_map_find_value(global.system_menu_menu_map,_menu_name);
+	var _array_length = array_length(_menu.texts);
+	
+	//Set Font Here As Well For Dynamicly Setting Width And Height
+	draw_set_font(global.system_menu_font);
+	if (_menu.font != undefined)
+		draw_set_font(_menu.font);
+	
+	//Get Padding
+	_menu.padding_item  = string_height("ONE LINE PER ITEM") + _menu.padding_item_extra;
+		
+	//Width
+	_menu.size[0] = 0;
+	for (var i = 0; i < _array_length; i++)
+		_menu.size[0] = max (string_width(_menu.texts[i]),_menu.size[0]);
+	_menu.size[0]+= _menu.padding_border * 2;
+	_menu.size[0] -= 2;
+	_menu.size[0] *= 0.05;
+	
+	//Height
+	_menu.size[1] = _menu.padding_border * 2 + string_height("ONE LINE PER ITEM") + (_array_length - 1) * _menu.padding_item;
+	_menu.size[1] -= 4;
+	_menu.size[1] *= 0.05;
+}
+
+////////////////////////////////////////////////////////////////////////////
+/// Event
+
+function system_menu_set_event_handler_obj(_obj)
+{
+	global.system_menu_event_handler_obj = instance_create_depth(0,0,-150,_obj);
+}
+
+function system_menu_reset_event()
+{
+	global.system_menu_event_for_frame_did = false;
+}
+
+function system_menu_do_event(_event_name)
+{
+	//Do Not Do Since We Already Did Our Event For This Frame
+	if (global.system_menu_event_for_frame_did)
+		return;
+	
+	//Exit Code If There Is No Event Handler Object
+	if (global.system_menu_event_handler_obj == undefined)
+		return;
+	
+	global.system_menu_event_name = _event_name;
+	with (global.system_menu_event_handler_obj)
+	{
+		event_user(0);
+	}
+	global.system_menu_event_name = "";
+	global.system_menu_event_for_frame_did = true;
+}
